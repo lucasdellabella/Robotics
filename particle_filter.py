@@ -59,6 +59,13 @@ def measurement_update(particles, measured_marker_list, grid):
 
     if observed_markers:
         for p in particles:
+
+            # Skip particle if outside arena / obstructed
+            particle_x, particle_y = p.xy
+            if not grid.is_free(particle_x, particle_y):
+                weights.append(0)
+                continue
+
             particle_prob = 1
             used_observed_markers = []
             for mx, my, mh in p.read_markers(grid):
@@ -68,9 +75,9 @@ def measurement_update(particles, measured_marker_list, grid):
                 for i, (ox, oy, oh) in enumerate(observed_markers):
                     px, py = rotate_point(mx, my, oh) # - mh
                     dist_diff = grid_distance(ox, oy, px, py)
-                    angle_diff = diff_heading_deg(mh, oh)
+                    angle_diff = diff_heading_deg(oh, mh)
                     exponent = float(dist_diff ** 2) / (2 * MARKER_TRANS_SIGMA ** 2) \
-                            - float(angle_diff ** 2) / (2 * MARKER_ROT_SIGMA ** 2)
+                            + float(angle_diff ** 2) / (2 * MARKER_ROT_SIGMA ** 2)
                     marker_observation_prob = math.exp(-1 * exponent)
 
                     # check if this observation gives the optimal matching
@@ -78,14 +85,12 @@ def measurement_update(particles, measured_marker_list, grid):
                         best_marker_match_index = i
                         best_marker_match_prob = marker_observation_prob
 
-                # Check we have found a marker match
-                if best_marker_match_index >= 0:
-                    # use highest found probability
-                    particle_prob *= best_marker_match_prob
+                # use highest found probability
+                particle_prob *= best_marker_match_prob
 
-                    # move the used marker to the used_markers list
-                    used_marker = observed_markers.pop(best_marker_match_index)
-                    used_observed_markers.append(used_marker)
+                # move the used marker to the used_markers list
+                used_marker = observed_markers.pop(best_marker_match_index)
+                used_observed_markers.append(used_marker)
             weights.append(0 if particle_prob == 1 else particle_prob)
             observed_markers.extend(used_observed_markers)
         print(str(len(particles)) + ' particles')
@@ -101,16 +106,18 @@ def measurement_update(particles, measured_marker_list, grid):
    
     # If all particles end up with probability 0, reset
     total_weight = sum(weights)
-    prob_dist = [float(prob) / total_weight for prob in weights]
+    print(total_weight)
+    if total_weight > 0:
+        prob_dist = [float(prob) / total_weight for prob in weights]
 
-    print("%1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f " % tuple(weights[:10]))
-    print("%1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f " % tuple(prob_dist[:10]))
+        print("%1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f " % tuple(weights[:10]))
+        print("%1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f " % tuple(prob_dist[:10]))
 
-    # Resampling step
-    for i, prob in enumerate(prob_dist):
-        for _ in range(int(prob * PARTICLE_COUNT)):
-            measured_particles.append(copy.deepcopy(particles[i]))
-    print('Left primary resampling loop')
+        # Resampling step
+        for i, prob in enumerate(prob_dist):
+            for _ in range(int(prob * PARTICLE_COUNT)):
+                measured_particles.append(copy.deepcopy(particles[i]))
+        print('Left primary resampling loop')
 
     # Random Resample
     count = 0
@@ -120,7 +127,6 @@ def measurement_update(particles, measured_marker_list, grid):
         count += 1
     print('Random resampled ' + str(count) + ' particles')
 
-    #return measured_particles
     return measured_particles
 
 ################################################
