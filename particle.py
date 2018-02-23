@@ -23,7 +23,8 @@ class Particle(object):
 
     def __init__(self, x, y, heading=None):
         if heading is None:
-            heading = random.uniform(0, 360)
+            #heading = random.uniform(0, 360)
+            heading = 0
         self.x = x
         self.y = y
         self.h = heading

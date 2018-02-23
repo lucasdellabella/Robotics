@@ -53,107 +53,29 @@ def measurement_update(particles, measured_marker_list, grid):
         Returns: the list of particles represents belief p(x_{t} | u_{t})
                 after measurement update
     """
-    observed_markers = measured_marker_list
-    measured_particles = []
-    weights = []
 
-    if observed_markers:
-        for p in particles:
+    def get_marker_prob(p, o, grid):
+        px, py, ph = p.xyh
+        if not grid.is_free(px, py):
+            return 0
+        ox, oy, oh = o
+        true_x, true_y = rotate_point(px, py, oh)
+        dist_diff = grid_distance(ox, oy, px, py)
+        angle_diff = diff_heading_deg(oh, ph)
+        exp_formula = float(dist_diff ** 2) / (2 * (MARKER_TRANS_SIGMA ** 2)) + float(angle_diff ** 2) / (2 * (MARKER_ROT_SIGMA ** 2))
+        marker_prob = math.exp(-1 * exp_formula)
+        return marker_prob
 
-            # Skip particle if outside arena / obstructed
-            particle_x, particle_y = p.xy
-            if not grid.is_free(particle_x, particle_y):
-                weights.append(0)
-                continue
+    new_particles = []
+    particle_probs = []
 
-            particle_prob = 1
-            used_observed_markers = []
-            for mx, my, mh in p.read_markers(grid):
-                # find best matching markers of observation for current marker
-                best_marker_match_index = -1
-                best_marker_match_prob = 0
-                for i, (ox, oy, oh) in enumerate(observed_markers):
-                    px, py = rotate_point(mx, my, oh) # - mh
-                    dist_diff = grid_distance(ox, oy, px, py)
-                    angle_diff = diff_heading_deg(oh, mh)
-                    exponent = float(dist_diff ** 2) / (2 * MARKER_TRANS_SIGMA ** 2) \
-                            + float(angle_diff ** 2) / (2 * MARKER_ROT_SIGMA ** 2)
-                    marker_observation_prob = math.exp(-1 * exponent)
+    for p in particles:
+        particle_prob = 1
+        for o in measured_marker_list:
+            marker_prob = get_marker_prob(p, o, grid)
+            particle_prob *= marker_prob
+        particle_probs.append(particle_prob)
 
-                    # check if this observation gives the optimal matching
-                    if marker_observation_prob > best_marker_match_prob:
-                        best_marker_match_index = i
-                        best_marker_match_prob = marker_observation_prob
-
-                # use highest found probability
-                particle_prob *= best_marker_match_prob
-
-                # move the used marker to the used_markers list
-                used_marker = observed_markers.pop(best_marker_match_index)
-                used_observed_markers.append(used_marker)
-            weights.append(0 if particle_prob == 1 else particle_prob)
-            observed_markers.extend(used_observed_markers)
-        print(str(len(particles)) + ' particles')
-        print('Left weights creation loop')
-    else:
-        weights = [1.0 / PARTICLE_COUNT] * PARTICLE_COUNT
-
-    # Normalization step
-    ## TODO: 
-    #total_weight becoming 0. 
-    #Thus weights is all 0s. 
-    #Thus particle_probs are all 0s
-   
-    # If all particles end up with probability 0, reset
-    total_weight = sum(weights)
-    print(total_weight)
-    if total_weight > 0:
-        prob_dist = [float(prob) / total_weight for prob in weights]
-
-        print("%1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f " % tuple(weights[:10]))
-        print("%1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f %1.8f " % tuple(prob_dist[:10]))
-
-        # Resampling step
-        for i, prob in enumerate(prob_dist):
-            for _ in range(int(prob * PARTICLE_COUNT)):
-                measured_particles.append(copy.deepcopy(particles[i]))
-        print('Left primary resampling loop')
-
-    # Random Resample
-    count = 0
-    while len(measured_particles) < PARTICLE_COUNT:
-        x, y = grid.random_free_place()
-        measured_particles.append(Particle(x, y))
-        count += 1
-    print('Random resampled ' + str(count) + ' particles')
-
-    return measured_particles
-
-################################################
-'''
-    for (rx, ry, rh) in measured_marker_list:
-        del_goal_x_0, del_goal_y_0 = rotate_point(rx, ry, rh)
-        del_goal_x_1 = 1 - del_goal_x_0
-        del_goal_y_1 = 1 - del_goal_y_0
-
-
-    # take list of markers, find marker positions using grid.
-        measured_particles = []
-        weights = []
-
-        # create list of weights
-        for (px, py, ph) in [p.xyh for p in particles]:
-            dist = min(abs(del_goal_y_0 - py),
-                       abs(del_goal_x_0 - px),
-                       abs(del_goal_y_1 - py),
-                       abs(del_goal_x_1 - px))
-            weight = 1.0 / dist
-            weights.append(weight)
-
-        # normalize to get prob distribution
-        total_weight = sum(weights)
-        prob_dist = [prob / total_weight for prob in weights]
-
-
-'''
-
+    print(particle_probs)
+            
+    return particles
